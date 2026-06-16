@@ -3343,10 +3343,6 @@
                 `;
             }).join('');
 
-            if (!window.currentRecordExercise && arrEx.length > 0) {
-                window.currentRecordExercise = arrEx[0];
-            }
-
             container.innerHTML = `
                 <div class="space-y-6">
                     <!-- PREMIUM RECORD STATISTICS DASHBOARD -->
@@ -3362,21 +3358,6 @@
                         <div class="glass-panel rounded-2xl p-3.5 flex flex-col items-center justify-center text-center border border-white/5 relative overflow-hidden">
                             <span class="text-[9px] text-slate-500 font-black uppercase tracking-wider">Dom. partie</span>
                             <span class="text-xs font-black text-iosPurple mt-1.5 truncate w-full">${dominantCategoryName}</span>
-                        </div>
-                    </div>
-
-                    <!-- Apple Health style PR chart -->
-                    <div class="glass-panel rounded-[2rem] p-5 shadow-2xl relative overflow-hidden">
-                        <div class="absolute top-0 right-0 w-32 h-32 bg-iosTeal/5 rounded-full blur-[45px] pointer-events-none"></div>
-                        <label class="block text-[11px] text-slate-500 uppercase font-black tracking-widest mb-3 px-1">Vývoj síly v čase</label>
-                        
-                        <button onclick="openExerciseSelectRollout()" id="selected-exercise-btn" class="w-full py-4.5 px-5 rounded-2xl bg-white/5 border border-white/10 text-white font-extrabold text-base text-left flex justify-between items-center active:scale-[0.98] transition-all">
-                            <span id="selected-exercise-name" class="truncate pr-4">${window.currentRecordExercise || 'Zvolte cvik'}</span>
-                            <i class="ph-bold ph-caret-down text-xl text-slate-400 flex-shrink-0"></i>
-                        </button>
-
-                        <div class="h-72 w-full mt-8 relative">
-                            <canvas id="canvas-record"></canvas>
                         </div>
                     </div>
 
@@ -3404,121 +3385,12 @@
                 </div>
             `;
 
-            // Initial render of filtered lists and the chart
+            // Initial render of filtered lists
             window.filterAndRenderRecordList();
-            setTimeout(() => {
-                if (window.currentRecordExercise) renderChartForExercise(window.currentRecordExercise);
-            }, 50);
         }
-
-        window.openExerciseSelectRollout = () => {
-            const loggedExercises = new Set();
-            for (const d in state.history) {
-                for (const dayId in state.history[d]) {
-                    for (const ex in state.history[d][dayId]) {
-                        if (ex !== '_notes') loggedExercises.add(ex);
-                    }
-                }
-            }
-            const arrEx = Array.from(loggedExercises).sort();
-            if (arrEx.length === 0) return;
-
-            const currentSelection = window.currentRecordExercise;
-
-            const exerciseItemsHtml = arrEx.map(ex => {
-                const isSelected = ex === currentSelection;
-                return `
-                    <button onclick="selectExerciseForAnalysis('${ex}')" class="w-full text-left p-5 rounded-2xl border transition-all flex justify-between items-center ${isSelected ? 'bg-iosTeal/15 border-iosTeal text-iosTeal font-extrabold shadow-lg shadow-iosTeal/10' : 'bg-white/3 border-white/5 text-slate-300 active:opacity-50'}">
-                        <span class="text-lg">${ex}</span>
-                        ${isSelected ? '<i class="ph-bold ph-check text-xl text-iosTeal"></i>' : ''}
-                    </button>
-                `;
-            }).join('');
-
-            const html = `
-                <div class="space-y-6 relative">
-                    <div class="flex justify-between items-start w-full">
-                        <div class="w-10"></div>
-                        <div class="text-center flex flex-col items-center">
-                            <span class="text-[11px] text-iosTeal uppercase font-black tracking-widest block">Analýza cviků</span>
-                            <h3 class="text-2xl font-extrabold text-white mt-1">Zvolte cvik</h3>
-                        </div>
-                        <button onclick="closeRollout()" class="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-slate-400 active:opacity-50 transition-opacity">
-                            <i class="ph-bold ph-x text-lg"></i>
-                        </button>
-                    </div>
-                    <div class="space-y-3 max-h-[50vh] overflow-y-auto no-scrollbar pt-3" style="-webkit-overflow-scrolling: touch;">
-                        ${exerciseItemsHtml}
-                    </div>
-                </div>
-            `;
-            openRollout(html);
-        };
-
-        window.selectExerciseForAnalysis = (ex) => {
-            window.currentRecordExercise = ex;
-            const btnText = document.getElementById('selected-exercise-name');
-            if (btnText) btnText.textContent = ex;
-            closeRollout();
-            renderChartForExercise(ex);
-        };
 
         window.setRecordCategoryFilter = (cat) => { recordCategoryFilter = cat; renderView(); };
         window.toggleRecordCategoryCollapse = (cat) => { recordCollapsedCategories[cat] = !recordCollapsedCategories[cat]; renderView(); };
-
-        let chartInstance = null;
-        function renderChartForExercise(ex) {
-            const ctx = document.getElementById('canvas-record');
-            if (!ctx) return;
-
-            const dates = Object.keys(state.history).sort();
-            const points = [];
-
-            dates.forEach(d => {
-                let maxW = 0;
-                for (const dId in state.history[d]) {
-                    if (state.history[d][dId][ex]) {
-                        const m = Math.max(...state.history[d][dId][ex].map(s => s.weight));
-                        if (m > maxW) maxW = m;
-                    }
-                }
-                if (maxW > 0) points.push({ date: d.substring(5), val: maxW }); 
-            });
-
-            if (chartInstance) chartInstance.destroy();
-
-            const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 240);
-            gradient.addColorStop(0, 'rgba(6, 182, 212, 0.35)');
-            gradient.addColorStop(1, 'rgba(6, 182, 212, 0.0)');
-
-            chartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: points.map(p => p.date),
-                    datasets: [{
-                        data: points.map(p => p.val),
-                        borderColor: '#06B6D4',
-                        backgroundColor: gradient,
-                        borderWidth: 3,
-                        pointBackgroundColor: '#000000',
-                        pointBorderColor: '#06B6D4',
-                        pointBorderWidth: 2,
-                        pointRadius: 5,
-                        fill: true,
-                        tension: 0.35
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10, weight: 'bold' } } },
-                        y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#64748b', font: { size: 10, weight: 'bold' } } }
-                    }
-                }
-            });
-        }
 
         function getExerciseRecordPB(ex) {
             let maxW = 0;
